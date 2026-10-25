@@ -1,24 +1,67 @@
+import argparse
 import sys
 
 
+EXIT_PHRASES = {"go to sleep", "stop assistant", "quit", "exit"}
+
+
+def _answer(agent, message, tts=None):
+    print("[SMILES]: Thinking...")
+    try:
+        answer = agent.respond(message)
+    except Exception as e:
+        print(f"[SMILES]: Gemini request failed: {e}")
+        answer = "Sorry, I couldn't reach my assistant service. Please try again."
+    print(f"[SMILES]: {answer}")
+    if tts:
+        tts.speak(answer)
+
+
+def _run_text_chat(agent):
+    print("[SMILES]: Text chat is ready. Type 'quit' to exit.")
+    while True:
+        try:
+            message = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if message.lower() in EXIT_PHRASES:
+            return
+        if message:
+            _answer(agent, message)
+
+
 def main():
+    arg_parser = argparse.ArgumentParser(description="Run the SMILES desktop assistant.")
+    arg_parser.add_argument(
+        "--text",
+        action="store_true",
+        help="Use typed chat instead of the microphone and speaker.",
+    )
+    args = arg_parser.parse_args()
+
     print("=" * 50)
     print("  SMILES - Smart Machine Interface & Local")
-    print("  Execution System v1.0.0")
+    print("  Gemini Personal Assistant")
     print("=" * 50)
     print("[SMILES]: Initializing system...")
+    agent = None
     try:
+        from smiles.agent import SmilesAgent
+
+        agent = SmilesAgent()
+        if args.text:
+            _run_text_chat(agent)
+            return
+
         from smiles.voice_input import VoiceInput
         from smiles.voice_output import VoiceOutput
-        from smiles.core import IntentParser, SystemExecutor
 
         tts = VoiceOutput()
         voice_input = VoiceInput()
-        intent_parser = IntentParser()
-        executor = SystemExecutor(tts)
 
         print("[SMILES]: Listening for 'Jarvis' or 'Smiles'.")
-        print("[SMILES]: After activation, you can give several commands in a row.")
+        print("[SMILES]: Ask a question or give a command after activation.")
         print("[SMILES]: Say 'go to sleep' to exit.")
 
         state = "passive"
@@ -38,20 +81,13 @@ def main():
                             break
 
                     if command_after_wake:
-                        # Single-breath command: "Jarvis open notepad" -> execute instantly
                         print(f"[SMILES]: Wake word + command detected: '{command_after_wake}'")
-                        if "go to sleep" in command_after_wake:
+                        if command_after_wake.lower().strip(" .!?") in EXIT_PHRASES:
                             tts.speak("Going to sleep. Goodbye, sir.")
                             break
-                        intent_data = intent_parser.parse(command_after_wake)
-                        try:
-                            executor.execute(intent_data)
-                        except Exception as e:
-                            print(f"[SMILES]: Command failed: {e}")
-                            tts.speak("Sorry, I couldn't complete that command.")
+                        _answer(agent, command_after_wake, tts)
                         continue
                     else:
-                        # Wake word only: "Jarvis" -> switch to active for follow-up
                         state = "active"
                         tts.speak("Yes, sir?")
                 continue
@@ -63,16 +99,11 @@ def main():
                     print("[SMILES]: No follow-up heard; waiting for the wake word.")
                     continue
 
-                if "go to sleep" in command:
+                if command.lower().strip(" .!?") in EXIT_PHRASES:
                     tts.speak("Going to sleep. Goodbye, sir.")
                     break
 
-                intent_data = intent_parser.parse(command)
-                try:
-                    executor.execute(intent_data)
-                except Exception as e:
-                    print(f"[SMILES]: Command failed: {e}")
-                    tts.speak("Sorry, I couldn't complete that command.")
+                _answer(agent, command, tts)
                 # Stay active for the next request. A 5 second silence returns
                 # to passive wake-word listening in listen_active's caller.
                 continue
@@ -81,6 +112,8 @@ def main():
     except Exception as e:
         print(f"[SMILES]: Startup/runtime error: {e}")
     finally:
+        if agent is not None:
+            agent.close()
         print("[SMILES]: System halted.")
 
 
