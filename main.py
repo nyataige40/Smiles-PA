@@ -109,6 +109,12 @@ def main():
                 continue
     except KeyboardInterrupt:
         print("\n[SMILES]: Keyboard interrupt received. Shutting down...")
+    except ModuleNotFoundError as e:
+        print(f"[SMILES]: Missing Python package: {e.name}")
+        print(
+            "[SMILES]: Install dependencies with this same Python interpreter:\n"
+            f'  "{sys.executable}" -m pip install -r requirements.txt'
+        )
     except Exception as e:
         print(f"[SMILES]: Startup/runtime error: {e}")
     finally:

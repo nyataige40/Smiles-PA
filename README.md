@@ -9,14 +9,14 @@ typed chat with `--text`.
 From PowerShell in this folder:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m venv .venv-smiles
+.\.venv-smiles\Scripts\python.exe -m pip install -r requirements.txt
 $env:GEMINI_API_KEY = "your Gemini API key"
-python main.py
+.\.venv-smiles\Scripts\python.exe main.py
 ```
 
-Use `python main.py --text` for typed chat without microphone or speaker access.
+Use `\.venv-smiles\Scripts\python.exe main.py --text` for typed chat without
+microphone or speaker access.
 Set `GEMINI_MODEL` to override the default model (`gemini-flash-latest`).
 
 SMILES needs an internet connection for both Google speech recognition and the
