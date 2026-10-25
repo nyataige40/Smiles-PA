@@ -5,7 +5,9 @@ class VoiceInput:
     def __init__(self):
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
-        # Tune thresholds to cut background noise without missing speech
+        # Bound the remote Google request so a slow or unavailable connection
+        # cannot leave the assistant stuck after it hears a phrase.
+        self.recognizer.operation_timeout = 6
         self.recognizer.pause_threshold = 0.8
         self.recognizer.phrase_threshold = 0.3
         self.recognizer.non_speaking_duration = 0.5
@@ -15,11 +17,14 @@ class VoiceInput:
         self.calibrate()
 
     def calibrate(self):
-        with self.microphone as source:
-            print("[SMILES]: Calibrating ambient noise...")
-            self.recognizer.adjust_for_ambient_noise(source, duration=2)
-        # Raise threshold above ambient level to suppress room hum / fan noise
-        self.recognizer.energy_threshold *= 1.25
+        try:
+            with self.microphone as source:
+                print("[SMILES]: Calibrating microphone for 1 second...")
+                self.recognizer.adjust_for_ambient_noise(source, duration=1)
+            # Avoid an extra threshold increase that can cause quiet speech to
+            # be ignored, especially when dynamic thresholding is enabled.
+        except Exception as e:
+            print(f"[SMILES]: Microphone calibration failed: {e}")
 
     def _listen_core(self, timeout, phrase_time_limit, verbose=False):
         try:
@@ -40,16 +45,14 @@ class VoiceInput:
                 print("[SMILES]: Could not understand audio.")
             return None
         except sr.RequestError as e:
-            if verbose:
-                print(f"[SMILES]: Speech service error: {e}")
+            print(f"[SMILES]: Speech service error (check internet connection): {e}")
             return None
         except Exception as e:
-            if verbose:
-                print(f"[SMILES]: Microphone error: {e}")
+            print(f"[SMILES]: Microphone/recognition error: {e}")
             return None
 
     def listen_passive(self):
-        # Long enough to capture "Jarvis open notepad" in one breath
+        # Wait for a wake word and an optional command in one breath.
         return self._listen_core(timeout=5, phrase_time_limit=5, verbose=False)
 
     def listen_active(self):

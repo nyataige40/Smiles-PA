@@ -1,5 +1,6 @@
 import pyttsx3
 
+
 class VoiceOutput:
     def __init__(self):
         self.engine = pyttsx3.init()
@@ -16,5 +17,9 @@ class VoiceOutput:
 
     def speak(self, text):
         print(f"[SMILES OUTPUT]: {text}")
-        self.engine.say(text)
-        self.engine.runAndWait()
+        try:
+            self.engine.say(text)
+            self.engine.runAndWait()
+        except Exception as e:
+            # A broken audio driver should not stop the command loop.
+            print(f"[SMILES]: Text-to-speech error: {e}")

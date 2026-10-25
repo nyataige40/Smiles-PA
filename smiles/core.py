@@ -8,6 +8,29 @@ import psutil
 import gc
 from datetime import datetime
 from typing import Optional
+from urllib.parse import quote_plus
+
+
+APP_MAP = {
+    "notepad": "notepad.exe",
+    "calculator": "calc.exe",
+    "paint": "mspaint.exe",
+    "chrome": "chrome.exe",
+    "firefox": "firefox.exe",
+    "edge": "msedge.exe",
+    "file explorer": "explorer.exe",
+    "explorer": "explorer.exe",
+    "terminal": "cmd.exe",
+    "command prompt": "cmd.exe",
+    "task manager": "taskmgr.exe",
+    "settings": "ms-settings:",
+    "control panel": "control.exe",
+}
+
+WEBSITE_ALIASES = {
+    "amazon", "facebook", "github", "gmail", "google", "instagram",
+    "linkedin", "reddit", "wikipedia", "x", "youtube",
+}
 
 
 class IntentParser:
@@ -78,10 +101,58 @@ class IntentParser:
     def parse(self, text: str) -> Optional[dict]:
         if not text:
             return None
-        text = text.strip()
-        if any(text == kw for kw in ["hello", "hi", "hey"]):
+        text = text.strip().strip(" .!?\t")
+        if re.fullmatch(r"(?:hello|hi|hey|greetings)(?: there)?", text, re.IGNORECASE):
             return {"intent": "greeting", "params": {}}
+
+        # Resolve specific actions before the broad "open ..." command.
+        priority = [
+            ("shutdown", r"\b(?:shutdown|shut\s+down|power\s+off)\b"),
+            ("restart", r"\b(?:restart|reboot)\b"),
+            ("close_app", r"\b(?:close|exit|quit)\s+(?:the\s+)?(.+)"),
+            ("search", r"\b(?:search\s+(?:for\s+)?|look\s+up\s+|google\s+)(.+)"),
+            ("file_operations", r"\b(?:create|make|new)\s+(?:a\s+)?(?:new\s+)?(.+)"),
+            ("system_info", r"\b(?:what\s+is\s+)?(?:the\s+)?(time|date)\b|\bwhat\s+time\s+is\s+it\b"),
+            ("battery_status", r"\b(?:battery|power|charging|charge)\b"),
+            ("storage_info", r"\b(?:storage|disk|space|drive)\b"),
+            ("memory_info", r"\b(?:memory|ram|cache)\b"),
+            ("climate_map", r"\b(?:temperature|climate|weather)\b"),
+        ]
+        for intent, pattern in priority:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                query = match.group(1).strip() if match.lastindex and match.group(1) else ""
+                params = {"query": query}
+                if intent == "file_operations":
+                    params["operation"] = "create"
+                return {"intent": intent, "params": params}
+
+        # "open notepad" is an app command, while "open youtube" or a URL
+        # is a website command.
+        match = re.search(r"\b(open|go\s+to|visit|navigate\s+to)\s+(.+)", text, re.IGNORECASE)
+        if match:
+            action, query = match.group(1).lower(), match.group(2).strip().rstrip(".!?")
+            query = re.sub(r"^(?:the|a)\s+", "", query, flags=re.IGNORECASE)
+            query = re.sub(r"\s+please$", "", query, flags=re.IGNORECASE)
+            normalized = query.lower()
+            is_app = normalized in APP_MAP
+            if action == "open" and is_app:
+                return {"intent": "open_app", "params": {"query": query}}
+            if re.search(r"\b(?:file|folder|directory)\b", normalized) and action == "open":
+                return {"intent": "file_operations", "params": {"query": query}}
+            return {"intent": "open_website", "params": {"query": query}}
+
+        match = re.search(r"\b(?:launch|start|run)\s+(?:the\s+)?(.+)", text, re.IGNORECASE)
+        if match:
+            return {"intent": "open_app", "params": {"query": match.group(1).strip()}}
+
         for intent_name, intent_data in self.commands.items():
+            if intent_name in {
+                "open_website", "open_app", "close_app", "file_operations",
+                "search", "greeting", "shutdown", "restart", "battery_status",
+                "storage_info", "memory_info", "climate_map",
+            }:
+                continue
             for pattern in intent_data["patterns"]:
                 match = re.search(pattern, text, re.IGNORECASE)
                 if match:
@@ -194,6 +265,12 @@ class SystemExecutor:
 
     def _file_operations(self, params):
         query = params.get("query", "")
+        if params.get("operation") == "create":
+            self.tts.speak(
+                "Creating files and folders is not implemented yet. "
+                "I can open File Explorer for you."
+            )
+            return
         if "file" in query or "folder" in query or "directory" in query:
             self.tts.speak("Opening file explorer.")
             if self.os_type == "Windows":

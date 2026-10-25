@@ -1,7 +1,4 @@
 import sys
-from smiles.voice_input import VoiceInput
-from smiles.voice_output import VoiceOutput
-from smiles.core import IntentParser, SystemExecutor
 
 
 def main():
@@ -10,19 +7,21 @@ def main():
     print("  Execution System v1.0.0")
     print("=" * 50)
     print("[SMILES]: Initializing system...")
-
-    tts = VoiceOutput()
-    voice_input = VoiceInput()
-    intent_parser = IntentParser()
-    executor = SystemExecutor(tts)
-
-    print("[SMILES]: Entering passive background listening mode.")
-    print("[SMILES]: Say 'Jarvis' or 'Smiles' to activate.")
-    print("[SMILES]: Say 'go to sleep' to exit.")
-
-    state = "passive"
-
     try:
+        from smiles.voice_input import VoiceInput
+        from smiles.voice_output import VoiceOutput
+        from smiles.core import IntentParser, SystemExecutor
+
+        tts = VoiceOutput()
+        voice_input = VoiceInput()
+        intent_parser = IntentParser()
+        executor = SystemExecutor(tts)
+
+        print("[SMILES]: Listening for 'Jarvis' or 'Smiles'.")
+        print("[SMILES]: After activation, you can give several commands in a row.")
+        print("[SMILES]: Say 'go to sleep' to exit.")
+
+        state = "passive"
         while True:
             if state == "passive":
                 user_input = voice_input.listen_passive()
@@ -45,7 +44,11 @@ def main():
                             tts.speak("Going to sleep. Goodbye, sir.")
                             break
                         intent_data = intent_parser.parse(command_after_wake)
-                        executor.execute(intent_data)
+                        try:
+                            executor.execute(intent_data)
+                        except Exception as e:
+                            print(f"[SMILES]: Command failed: {e}")
+                            tts.speak("Sorry, I couldn't complete that command.")
                         continue
                     else:
                         # Wake word only: "Jarvis" -> switch to active for follow-up
@@ -57,6 +60,7 @@ def main():
                 command = voice_input.listen_active()
                 if not command:
                     state = "passive"
+                    print("[SMILES]: No follow-up heard; waiting for the wake word.")
                     continue
 
                 if "go to sleep" in command:
@@ -64,13 +68,18 @@ def main():
                     break
 
                 intent_data = intent_parser.parse(command)
-                executor.execute(intent_data)
-                state = "passive"
+                try:
+                    executor.execute(intent_data)
+                except Exception as e:
+                    print(f"[SMILES]: Command failed: {e}")
+                    tts.speak("Sorry, I couldn't complete that command.")
+                # Stay active for the next request. A 5 second silence returns
+                # to passive wake-word listening in listen_active's caller.
                 continue
     except KeyboardInterrupt:
         print("\n[SMILES]: Keyboard interrupt received. Shutting down...")
     except Exception as e:
-        print(f"[SMILES]: Fatal error: {e}")
+        print(f"[SMILES]: Startup/runtime error: {e}")
     finally:
         print("[SMILES]: System halted.")
 
