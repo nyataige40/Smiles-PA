@@ -1,8 +1,31 @@
 import argparse
+from pathlib import Path
+import subprocess
 import sys
 
 
 EXIT_PHRASES = {"go to sleep", "stop assistant", "quit", "exit"}
+
+
+def _handoff_to_project_environment():
+    """Use the project's installed virtual environment when launched globally."""
+    project_root = Path(__file__).resolve().parent
+    if sys.platform == "win32":
+        project_python = project_root / ".venv-smiles" / "Scripts" / "python.exe"
+    else:
+        project_python = project_root / ".venv-smiles" / "bin" / "python"
+
+    if (
+        not project_python.is_file()
+        or Path(sys.executable).resolve() == project_python.resolve()
+    ):
+        return None
+
+    print("[SMILES]: Switching to the project Python environment...", flush=True)
+    return subprocess.call(
+        [str(project_python), str(Path(__file__).resolve()), *sys.argv[1:]],
+        cwd=str(project_root),
+    )
 
 
 def _answer(agent, message, tts=None):
@@ -46,13 +69,14 @@ def main():
     print("=" * 50)
     print("[SMILES]: Initializing system...")
     agent = None
+    exit_code = 0
     try:
         from smiles.agent import SmilesAgent
 
         agent = SmilesAgent()
         if args.text:
             _run_text_chat(agent)
-            return
+            return exit_code
 
         from smiles.voice_input import VoiceInput
         from smiles.voice_output import VoiceOutput
@@ -109,20 +133,26 @@ def main():
                 continue
     except KeyboardInterrupt:
         print("\n[SMILES]: Keyboard interrupt received. Shutting down...")
+        exit_code = 130
     except ModuleNotFoundError as e:
         print(f"[SMILES]: Missing Python package: {e.name}")
         print(
             "[SMILES]: Install dependencies with this same Python interpreter:\n"
             f'  "{sys.executable}" -m pip install -r requirements.txt'
         )
+        exit_code = 1
     except Exception as e:
         print(f"[SMILES]: Startup/runtime error: {e}")
+        exit_code = 1
     finally:
         if agent is not None:
             agent.close()
         print("[SMILES]: System halted.")
+    return exit_code
 
 
 if __name__ == "__main__":
-    main()
-    sys.exit(0)
+    exit_code = _handoff_to_project_environment()
+    if exit_code is None:
+        exit_code = main()
+    sys.exit(exit_code)

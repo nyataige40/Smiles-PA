@@ -11,7 +11,7 @@ From PowerShell in this folder:
 ```powershell
 python -m venv .venv-smiles
 .\.venv-smiles\Scripts\python.exe -m pip install -r requirements.txt
-$env:GEMINI_API_KEY = "your Gemini API key"
+$env:GOOGLE_API_KEY = "your Gemini API key"
 .\.venv-smiles\Scripts\python.exe main.py
 ```
 
@@ -20,8 +20,9 @@ microphone or speaker access.
 Set `GEMINI_MODEL` to override the default model (`gemini-flash-latest`).
 
 SMILES needs an internet connection for both Google speech recognition and the
-Gemini API. The API key is read from the environment and is not stored in the
-project. Do not commit API keys to source control.
+Gemini API. The API key is read from `GOOGLE_API_KEY` (or the legacy
+`GEMINI_API_KEY`) and is not stored in the project. Do not commit API keys to
+source control.
 
 ## Available tools
 

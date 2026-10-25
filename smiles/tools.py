@@ -169,18 +169,30 @@ def get_current_time() -> dict:
     return {"date": now.strftime("%A, %B %d, %Y"), "time": now.strftime("%I:%M %p %Z")}
 
 
-def get_system_status() -> dict:
-    """Read current battery, memory, and disk status from the computer."""
-    status = {"memory_percent": psutil.virtual_memory().percent}
+def get_battery_status() -> dict:
+    """Read the local battery percentage and charging state, if available."""
     try:
         battery = psutil.sensors_battery()
     except (OSError, RuntimeError):
         battery = None
     if battery is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "battery_percent": battery.percent,
+        "charging": battery.power_plugged,
+    }
+
+
+def get_system_status() -> dict:
+    """Read current battery, memory, and disk status from the computer."""
+    status = {"memory_percent": psutil.virtual_memory().percent}
+    battery = get_battery_status()
+    if not battery["available"]:
         status["battery"] = "not available on this device"
     else:
-        status["battery_percent"] = battery.percent
-        status["charging"] = battery.power_plugged
+        status["battery_percent"] = battery["battery_percent"]
+        status["charging"] = battery["charging"]
 
     disk = psutil.disk_usage(os.path.abspath(os.sep))
     status["disk_free_gb"] = round(disk.free / (1024 ** 3), 1)
